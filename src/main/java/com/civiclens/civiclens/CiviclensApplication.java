@@ -9,5 +9,4 @@ public class CiviclensApplication {
     public static void main(String[] args) {
         SpringApplication.run(CiviclensApplication.class, args);
     }
-
 }

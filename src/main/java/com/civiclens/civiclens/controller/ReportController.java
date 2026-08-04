@@ -1,7 +1,10 @@
 package com.civiclens.civiclens.controller;
 
 import com.civiclens.civiclens.model.Report;
+import com.civiclens.civiclens.model.User;
+import com.civiclens.civiclens.repository.UserRepository;
 import com.civiclens.civiclens.service.ReportService;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -12,13 +15,23 @@ import java.util.List;
 public class ReportController {
 
     private final ReportService reportService;
+    private final UserRepository userRepository;
 
-    public ReportController(ReportService reportService) {
+    public ReportController(ReportService reportService, UserRepository userRepository) {
         this.reportService = reportService;
+        this.userRepository = userRepository;
     }
 
     @PostMapping
-    public Report saveReport(@RequestBody Report report) {
+    public Report createReport(@RequestBody Report report, Authentication authentication) {
+
+        String email = authentication.getName();
+
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+
+        report.setUser(user);
+
         return reportService.saveReport(report);
     }
 
@@ -32,17 +45,17 @@ public class ReportController {
         return reportService.getReportById(id);
     }
 
-    @PutMapping("/{id}")
-    public Report updateReport(@PathVariable Long id, @RequestBody Report report) {
-        return reportService.updateReport(id, report);
+    @PutMapping("/{id}/status")
+    public Report updateStatus(@PathVariable Long id,
+                               @RequestParam String status) {
+        return reportService.updateStatus(id, status);
     }
-    @PutMapping("/test")
-    public String testPut() {
-        return "PUT is working";
-    }
+
     @DeleteMapping("/{id}")
     public String deleteReport(@PathVariable Long id) {
+
         reportService.deleteReport(id);
-        return "Report deleted successfully!";
+
+        return "Report deleted successfully";
     }
 }

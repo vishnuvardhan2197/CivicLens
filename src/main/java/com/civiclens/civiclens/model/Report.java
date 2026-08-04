@@ -1,9 +1,7 @@
 package com.civiclens.civiclens.model;
 
-import jakarta.persistence.Entity;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.GenerationType;
-import jakarta.persistence.Id;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import jakarta.persistence.*;
 
 @Entity
 public class Report {
@@ -13,10 +11,23 @@ public class Report {
     private Long id;
 
     private String title;
+
     private String description;
-    private String location;
+
+    private String category;
+
+    private Double latitude;
+
+    private Double longitude;
+
     private String imageUrl;
+
     private String status;
+
+    @ManyToOne
+    @JoinColumn(name = "user_id")
+    @JsonIgnoreProperties({"reports", "password"})
+    private User user;
 
     public Report() {
     }
@@ -45,12 +56,28 @@ public class Report {
         this.description = description;
     }
 
-    public String getLocation() {
-        return location;
+    public String getCategory() {
+        return category;
     }
 
-    public void setLocation(String location) {
-        this.location = location;
+    public void setCategory(String category) {
+        this.category = category;
+    }
+
+    public Double getLatitude() {
+        return latitude;
+    }
+
+    public void setLatitude(Double latitude) {
+        this.latitude = latitude;
+    }
+
+    public Double getLongitude() {
+        return longitude;
+    }
+
+    public void setLongitude(Double longitude) {
+        this.longitude = longitude;
     }
 
     public String getImageUrl() {
@@ -67,5 +94,13 @@ public class Report {
 
     public void setStatus(String status) {
         this.status = status;
+    }
+
+    public User getUser() {
+        return user;
+    }
+
+    public void setUser(User user) {
+        this.user = user;
     }
 }

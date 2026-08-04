@@ -6,8 +6,6 @@ import org.springframework.stereotype.Service;
 
 import java.util.List;
 
-import java.util.Optional;
-
 @Service
 public class ReportService {
 
@@ -23,27 +21,26 @@ public class ReportService {
 
     public List<Report> getAllReports() {
         return reportRepository.findAll();
-
     }
     public Report getReportById(Long id) {
-        return reportRepository.findById(id).orElse(null);
+        return reportRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Report not found"));
     }
-    public Report updateReport(Long id, Report updatedReport) {
-        Report report = reportRepository.findById(id).orElse(null);
+    public Report updateStatus(Long id, String status) {
 
-        if (report != null) {
-            report.setTitle(updatedReport.getTitle());
-            report.setDescription(updatedReport.getDescription());
-            report.setLocation(updatedReport.getLocation());
-            report.setImageUrl(updatedReport.getImageUrl());
-            report.setStatus(updatedReport.getStatus());
+        Report report = reportRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Report not found"));
 
-            return reportRepository.save(report);
-        }
+        report.setStatus(status);
 
-        return null;
+        return reportRepository.save(report);
     }
     public void deleteReport(Long id) {
+
+        if (!reportRepository.existsById(id)) {
+            throw new RuntimeException("Report not found");
+        }
+
         reportRepository.deleteById(id);
     }
 }
