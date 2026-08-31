@@ -1,6 +1,7 @@
 package com.civiclens.civiclens.service;
 
 import com.civiclens.civiclens.model.Report;
+import com.civiclens.civiclens.model.User;
 import com.civiclens.civiclens.repository.ReportRepository;
 import org.springframework.stereotype.Service;
 
@@ -22,10 +23,16 @@ public class ReportService {
     public List<Report> getAllReports() {
         return reportRepository.findAll();
     }
+
+    public List<Report> getReportsByUser(User user) {
+        return reportRepository.findByUser(user);
+    }
+
     public Report getReportById(Long id) {
         return reportRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Report not found"));
     }
+
     public Report updateStatus(Long id, String status) {
 
         Report report = reportRepository.findById(id)
@@ -35,6 +42,7 @@ public class ReportService {
 
         return reportRepository.save(report);
     }
+
     public void deleteReport(Long id) {
 
         if (!reportRepository.existsById(id)) {

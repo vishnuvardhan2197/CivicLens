@@ -26,8 +26,7 @@ public class User {
     @JsonIgnore
     private List<Report> reports;
 
-    public User() {
-    }
+    public User() {}
 
     public Long getId() {
         return id;

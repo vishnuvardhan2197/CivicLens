@@ -1,69 +1,79 @@
 package com.civiclens.civiclens.config;
 
-import com.civiclens.civiclens.model.User;
-import com.civiclens.civiclens.repository.UserRepository;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
-import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.web.authentication.WebAuthenticationDetailsSource;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
-import java.util.List;
 
 @Component
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
-    private final JwtUtil jwtUtil;
-    private final UserRepository userRepository;
+    @Autowired
+    private JwtUtil jwtUtil;
 
-    public JwtAuthenticationFilter(JwtUtil jwtUtil,
-                                   UserRepository userRepository) {
-        this.jwtUtil = jwtUtil;
-        this.userRepository = userRepository;
-    }
+    @Autowired
+    @Lazy
+    private UserDetailsService userDetailsService;
 
     @Override
-    protected void doFilterInternal(HttpServletRequest request,
-                                    HttpServletResponse response,
-                                    FilterChain filterChain)
+    protected void doFilterInternal(
+            HttpServletRequest request,
+            HttpServletResponse response,
+            FilterChain filterChain)
             throws ServletException, IOException {
 
-        String authHeader = request.getHeader("Authorization");
+        String authorizationHeader = request.getHeader("Authorization");
 
-        if (authHeader != null && authHeader.startsWith("Bearer ")) {
+        String username = null;
+        String jwt = null;
 
-            String token = authHeader.substring(7);
+        if (authorizationHeader != null &&
+                authorizationHeader.startsWith("Bearer ")) {
 
-            if (jwtUtil.validateToken(token)) {
+            jwt = authorizationHeader.substring(7);
 
-                String email = jwtUtil.extractEmail(token);
-                System.out.println("JWT Email: " + email);
+            try {
+                username = jwtUtil.extractUsername(jwt);
+            } catch (Exception e) {
+                username = null;
+            }
+        }
 
-                User user = userRepository.findByEmail(email)
-                        .orElse(null);
+        if (username != null &&
+                SecurityContextHolder.getContext().getAuthentication() == null) {
 
-                if (user != null) {
+            UserDetails userDetails =
+                    userDetailsService.loadUserByUsername(username);
 
-                    UsernamePasswordAuthenticationToken authentication =
-                            new UsernamePasswordAuthenticationToken(
-                                    email,
-                                    null,
-                                    List.of(new SimpleGrantedAuthority("ROLE_" + user.getRole()))
-                            );
+            if (jwtUtil.validateToken(jwt, userDetails.getUsername())) {
 
-                    authentication.setDetails(
-                            new WebAuthenticationDetailsSource().buildDetails(request)
-                    );
+                UsernamePasswordAuthenticationToken authentication =
+                        new UsernamePasswordAuthenticationToken(
+                                userDetails,
+                                null,
+                                userDetails.getAuthorities()
+                        );
 
-                    SecurityContextHolder.getContext().setAuthentication(authentication);
-                    System.out.println("Role from DB: " + user.getRole());
-                }
+                authentication.setDetails(
+                        new WebAuthenticationDetailsSource()
+                                .buildDetails(request)
+                );
+
+                SecurityContextHolder
+                        .getContext()
+                        .setAuthentication(authentication);
             }
         }
 

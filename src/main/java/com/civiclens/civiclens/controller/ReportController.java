@@ -17,13 +17,18 @@ public class ReportController {
     private final ReportService reportService;
     private final UserRepository userRepository;
 
-    public ReportController(ReportService reportService, UserRepository userRepository) {
+    public ReportController(
+            ReportService reportService,
+            UserRepository userRepository) {
+
         this.reportService = reportService;
         this.userRepository = userRepository;
     }
 
     @PostMapping
-    public Report createReport(@RequestBody Report report, Authentication authentication) {
+    public Report createReport(
+            @RequestBody Report report,
+            Authentication authentication) {
 
         String email = authentication.getName();
 
@@ -31,6 +36,9 @@ public class ReportController {
                 .orElseThrow(() -> new RuntimeException("User not found"));
 
         report.setUser(user);
+
+        // Every new report starts with PENDING status
+        report.setStatus("PENDING");
 
         return reportService.saveReport(report);
     }
@@ -40,14 +48,27 @@ public class ReportController {
         return reportService.getAllReports();
     }
 
+    @GetMapping("/my")
+    public List<Report> getMyReports(Authentication authentication) {
+
+        String email = authentication.getName();
+
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+
+        return reportService.getReportsByUser(user);
+    }
+
     @GetMapping("/{id}")
     public Report getReportById(@PathVariable Long id) {
         return reportService.getReportById(id);
     }
 
     @PutMapping("/{id}/status")
-    public Report updateStatus(@PathVariable Long id,
-                               @RequestParam String status) {
+    public Report updateStatus(
+            @PathVariable Long id,
+            @RequestParam String status) {
+
         return reportService.updateStatus(id, status);
     }
 
