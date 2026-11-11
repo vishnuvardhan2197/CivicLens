@@ -79,20 +79,31 @@ public class FileUploadService {
         }
 
         // Initialize Cloudinary if credentials are provided for persistent cloud storage
-        if (cloudinaryUrl != null && !cloudinaryUrl.isBlank()) {
-            this.cloudinaryClient = new Cloudinary(cloudinaryUrl.trim());
-            log.info("Cloudinary persistent media storage initialized via CLOUDINARY_URL");
-        } else if (cloudinaryCloudName != null && !cloudinaryCloudName.isBlank()
-                && cloudinaryApiKey != null && !cloudinaryApiKey.isBlank()
-                && cloudinaryApiSecret != null && !cloudinaryApiSecret.isBlank()) {
-            this.cloudinaryClient = new Cloudinary(ObjectUtils.asMap(
-                    "cloud_name", cloudinaryCloudName.trim(),
-                    "api_key", cloudinaryApiKey.trim(),
-                    "api_secret", cloudinaryApiSecret.trim()
-            ));
-            log.info("Cloudinary persistent media storage initialized for cloud: {}", cloudinaryCloudName);
+        boolean isPlaceholderUrl = cloudinaryUrl != null && (cloudinaryUrl.contains("<api_key>") || cloudinaryUrl.contains("<cloud_name>") || cloudinaryUrl.contains("your_api_key"));
+        if (cloudinaryUrl != null && !cloudinaryUrl.isBlank() && !isPlaceholderUrl) {
+            try {
+                this.cloudinaryClient = new Cloudinary(cloudinaryUrl.trim());
+                log.info("Cloudinary persistent media storage initialized via CLOUDINARY_URL");
+            } catch (Exception e) {
+                log.warn("Failed to initialize Cloudinary with CLOUDINARY_URL: {}. Falling back to local storage.", e.getMessage());
+                this.cloudinaryClient = null;
+            }
+        } else if (cloudinaryCloudName != null && !cloudinaryCloudName.isBlank() && !cloudinaryCloudName.contains("<cloud_name>")
+                && cloudinaryApiKey != null && !cloudinaryApiKey.isBlank() && !cloudinaryApiKey.contains("<api_key>")
+                && cloudinaryApiSecret != null && !cloudinaryApiSecret.isBlank() && !cloudinaryApiSecret.contains("<api_secret>")) {
+            try {
+                this.cloudinaryClient = new Cloudinary(ObjectUtils.asMap(
+                        "cloud_name", cloudinaryCloudName.trim(),
+                        "api_key", cloudinaryApiKey.trim(),
+                        "api_secret", cloudinaryApiSecret.trim()
+                ));
+                log.info("Cloudinary persistent media storage initialized for cloud: {}", cloudinaryCloudName);
+            } catch (Exception e) {
+                log.warn("Failed to initialize Cloudinary: {}. Falling back to local storage.", e.getMessage());
+                this.cloudinaryClient = null;
+            }
         } else {
-            log.info("Cloudinary credentials not provided. Using local disk storage in: {}", this.rootStorageLocation);
+            log.info("Cloudinary credentials not provided or contain placeholder values. Using local disk storage in: {}", this.rootStorageLocation);
         }
     }
 
