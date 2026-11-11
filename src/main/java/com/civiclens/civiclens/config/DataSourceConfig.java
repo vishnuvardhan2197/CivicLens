@@ -38,15 +38,17 @@ public class DataSourceConfig {
             rawUrl = "jdbc:postgresql://localhost:5432/civiclens";
         }
 
-        String username = env.getProperty("SPRING_DATASOURCE_USERNAME");
-        if (username == null || username.isBlank()) {
-            username = env.getProperty("spring.datasource.username", "vadlavishnuvaradhanachari");
+        // Clean and unquote rawUrl in case environment variable has surrounding quotes
+        if (rawUrl != null) {
+            rawUrl = rawUrl.trim();
+            while ((rawUrl.startsWith("\"") && rawUrl.endsWith("\"")) ||
+                   (rawUrl.startsWith("'") && rawUrl.endsWith("'"))) {
+                rawUrl = rawUrl.substring(1, rawUrl.length() - 1).trim();
+            }
         }
 
+        String username = env.getProperty("SPRING_DATASOURCE_USERNAME");
         String password = env.getProperty("SPRING_DATASOURCE_PASSWORD");
-        if (password == null || password.isBlank()) {
-            password = env.getProperty("spring.datasource.password", "");
-        }
 
         String maxPoolSizeStr = env.getProperty("DB_MAX_POOL_SIZE", "5");
         int maxPoolSize = 5;
@@ -68,10 +70,14 @@ public class DataSourceConfig {
                 if (uri.getUserInfo() != null) {
                     String[] userInfo = uri.getUserInfo().split(":", 2);
                     if (userInfo.length > 0 && !userInfo[0].isBlank()) {
-                        username = userInfo[0];
+                        if (username == null || username.isBlank() || "vadlavishnuvaradhanachari".equals(username)) {
+                            username = userInfo[0];
+                        }
                     }
                     if (userInfo.length > 1 && !userInfo[1].isBlank()) {
-                        password = userInfo[1];
+                        if (password == null || password.isBlank()) {
+                            password = userInfo[1];
+                        }
                     }
                 }
 
@@ -79,7 +85,7 @@ public class DataSourceConfig {
                 int port = uri.getPort() != -1 ? uri.getPort() : 5432;
                 String path = uri.getPath();
                 if (path == null || path.isEmpty() || path.equals("/")) {
-                    path = "/civiclens";
+                    path = "/neondb";
                 }
 
                 String query = uri.getQuery();
@@ -97,6 +103,14 @@ public class DataSourceConfig {
             }
         } else if (rawUrl != null && !rawUrl.startsWith("jdbc:")) {
             jdbcUrl = "jdbc:" + rawUrl;
+        }
+
+        // Final fallback for local development if username is still empty
+        if (username == null || username.isBlank()) {
+            username = env.getProperty("spring.datasource.username", "vadlavishnuvaradhanachari");
+        }
+        if (password == null) {
+            password = env.getProperty("spring.datasource.password", "");
         }
 
         log.info("Initializing CivicLensHikariPool with JDBC URL: {} and user: {}", maskUrl(jdbcUrl), username);
