@@ -1,16 +1,20 @@
 package com.civiclens.civiclens.controller;
 
 import com.civiclens.civiclens.config.JwtUtil;
+import com.civiclens.civiclens.dto.ApiResponse;
+import com.civiclens.civiclens.dto.CreateStaffRequest;
+import com.civiclens.civiclens.dto.RegisterRequest;
 import com.civiclens.civiclens.model.JwtResponse;
 import com.civiclens.civiclens.model.LoginRequest;
 import com.civiclens.civiclens.model.User;
 import com.civiclens.civiclens.service.UserService;
+import jakarta.validation.Valid;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
 @RequestMapping("/auth")
-@CrossOrigin("*")
 public class AuthController {
 
     private final UserService userService;
@@ -22,21 +26,32 @@ public class AuthController {
     }
 
     @PostMapping("/register")
-    public User register(@RequestBody User user) {
-        return userService.register(user);
+    public ResponseEntity<?> register(@Valid @RequestBody RegisterRequest request) {
+        User registered = userService.registerCitizen(request);
+        return ResponseEntity.status(HttpStatus.CREATED).body(registered);
     }
 
     @PostMapping("/login")
-    public ResponseEntity<?> login(@RequestBody LoginRequest request) {
-
+    public ResponseEntity<JwtResponse> login(@Valid @RequestBody LoginRequest request) {
         User user = userService.login(request.getEmail(), request.getPassword());
 
-        if (user == null) {
-            return ResponseEntity.badRequest().body("Invalid email or password");
-        }
+        String roleName = user.getRole() != null ? user.getRole().name() : "CITIZEN";
+        String token = jwtUtil.generateToken(user.getEmail(), roleName, user.getId());
 
-        String token = jwtUtil.generateToken(user.getEmail());
+        JwtResponse response = new JwtResponse(
+                token,
+                roleName,
+                user.getEmail(),
+                user.getName(),
+                user.getId()
+        );
 
-        return ResponseEntity.ok(new JwtResponse(token));
+        return ResponseEntity.ok(response);
+    }
+
+    @PostMapping("/create-staff")
+    public ResponseEntity<?> createStaff(@Valid @RequestBody CreateStaffRequest request) {
+        User staff = userService.createStaff(request);
+        return ResponseEntity.status(HttpStatus.CREATED).body(staff);
     }
 }
