@@ -115,6 +115,9 @@ public class DataSourceConfig {
 
         log.info("Initializing CivicLensHikariPool with JDBC URL: {} and user: {}", maskUrl(jdbcUrl), username);
 
+        // Ensure Hibernate can read the canonical JDBC URL if it checks system properties
+        System.setProperty("jakarta.persistence.jdbc.url", jdbcUrl);
+
         HikariConfig config = new HikariConfig();
         config.setJdbcUrl(jdbcUrl);
         config.setDriverClassName("org.postgresql.Driver");
@@ -130,6 +133,7 @@ public class DataSourceConfig {
         config.setConnectionTimeout(30000);
         config.setIdleTimeout(300000);
         config.setMaxLifetime(1800000);
+        config.setInitializationFailTimeout(60000);
         config.setPoolName("CivicLensHikariPool");
 
         return new HikariDataSource(config);
