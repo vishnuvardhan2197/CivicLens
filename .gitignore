@@ -46,3 +46,5 @@ uploads/
 .env.*
 !.env.example
 *.local
+.neon
+node_modules/

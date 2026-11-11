@@ -4,10 +4,10 @@ import com.zaxxer.hikari.HikariConfig;
 import com.zaxxer.hikari.HikariDataSource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Primary;
+import org.springframework.core.env.Environment;
 
 import javax.sql.DataSource;
 import java.net.URI;
@@ -17,28 +17,46 @@ public class DataSourceConfig {
 
     private static final Logger log = LoggerFactory.getLogger(DataSourceConfig.class);
 
-    @Value("${spring.datasource.url:${SPRING_DATASOURCE_URL:${DATABASE_URL:jdbc:postgresql://localhost:5432/civiclens}}}")
-    private String rawUrl;
+    private final Environment env;
 
-    @Value("${spring.datasource.username:${SPRING_DATASOURCE_USERNAME:}}")
-    private String configuredUsername;
-
-    @Value("${spring.datasource.password:${SPRING_DATASOURCE_PASSWORD:}}")
-    private String configuredPassword;
-
-    @Value("${spring.datasource.hikari.maximum-pool-size:${DB_MAX_POOL_SIZE:5}}")
-    private int maxPoolSize;
+    public DataSourceConfig(Environment env) {
+        this.env = env;
+    }
 
     @Bean
     @Primary
     public DataSource dataSource() {
+        // Priority: DATABASE_URL (Render/Neon standard) -> SPRING_DATASOURCE_URL -> spring.datasource.url -> localhost fallback
+        String rawUrl = env.getProperty("DATABASE_URL");
+        if (rawUrl == null || rawUrl.isBlank()) {
+            rawUrl = env.getProperty("SPRING_DATASOURCE_URL");
+        }
+        if (rawUrl == null || rawUrl.isBlank()) {
+            rawUrl = env.getProperty("spring.datasource.url");
+        }
+        if (rawUrl == null || rawUrl.isBlank()) {
+            rawUrl = "jdbc:postgresql://localhost:5432/civiclens";
+        }
+
+        String username = env.getProperty("SPRING_DATASOURCE_USERNAME");
+        if (username == null || username.isBlank()) {
+            username = env.getProperty("spring.datasource.username", "vadlavishnuvaradhanachari");
+        }
+
+        String password = env.getProperty("SPRING_DATASOURCE_PASSWORD");
+        if (password == null || password.isBlank()) {
+            password = env.getProperty("spring.datasource.password", "");
+        }
+
+        String maxPoolSizeStr = env.getProperty("DB_MAX_POOL_SIZE", "5");
+        int maxPoolSize = 5;
+        try {
+            maxPoolSize = Integer.parseInt(maxPoolSizeStr);
+        } catch (NumberFormatException ignored) {}
+
         String jdbcUrl = rawUrl;
-        String username = configuredUsername;
-        String password = configuredPassword;
 
-        log.info("Configuring DataSource from URL: {}", maskUrl(rawUrl));
-
-        // If the URL starts with postgres:// or postgresql:// (URI format without jdbc:)
+        // If the URL is in URI format (postgres:// or postgresql:// without jdbc:)
         if (rawUrl != null && (rawUrl.startsWith("postgres://") || rawUrl.startsWith("postgresql://"))) {
             try {
                 String cleanUri = rawUrl;
@@ -49,10 +67,10 @@ public class DataSourceConfig {
 
                 if (uri.getUserInfo() != null) {
                     String[] userInfo = uri.getUserInfo().split(":", 2);
-                    if (username == null || username.isBlank()) {
+                    if (userInfo.length > 0 && !userInfo[0].isBlank()) {
                         username = userInfo[0];
                     }
-                    if (userInfo.length > 1 && (password == null || password.isBlank())) {
+                    if (userInfo.length > 1 && !userInfo[1].isBlank()) {
                         password = userInfo[1];
                     }
                 }
@@ -65,13 +83,12 @@ public class DataSourceConfig {
                 }
 
                 String query = uri.getQuery();
-                // Ensure sslmode=require for cloud PostgreSQL (Neon / Supabase) if not specified
                 if (query == null || !query.contains("sslmode")) {
                     query = (query == null || query.isBlank()) ? "sslmode=require" : query + "&sslmode=require";
                 }
 
                 jdbcUrl = "jdbc:postgresql://" + host + ":" + port + path + "?" + query;
-                log.info("Successfully converted PostgreSQL URI to JDBC URL: {}", maskUrl(jdbcUrl));
+                log.info("Converted cloud PostgreSQL URI to JDBC URL: {}", maskUrl(jdbcUrl));
             } catch (Exception e) {
                 log.warn("Failed to parse PostgreSQL URI, prefixing jdbc: directly: {}", e.getMessage());
                 if (!rawUrl.startsWith("jdbc:")) {
@@ -81,6 +98,8 @@ public class DataSourceConfig {
         } else if (rawUrl != null && !rawUrl.startsWith("jdbc:")) {
             jdbcUrl = "jdbc:" + rawUrl;
         }
+
+        log.info("Initializing CivicLensHikariPool with JDBC URL: {} and user: {}", maskUrl(jdbcUrl), username);
 
         HikariConfig config = new HikariConfig();
         config.setJdbcUrl(jdbcUrl);
