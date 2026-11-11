@@ -40,3 +40,9 @@ frontend/node_modules/
 ### CivicLens Media Uploads & Backups ###
 uploads/
 *.sql
+
+### Environment and Secrets ###
+.env
+.env.*
+!.env.example
+*.local

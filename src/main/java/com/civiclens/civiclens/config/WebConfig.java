@@ -21,6 +21,9 @@ public class WebConfig implements WebMvcConfigurer {
     @Value("${civiclens.upload.dir:uploads}")
     private String uploadBaseDir;
 
+    @Value("${civiclens.cors.allowed-origins:http://localhost:5173,http://localhost:5174,http://localhost:3000}")
+    private String allowedOrigins;
+
     @Override
     public void addResourceHandlers(ResourceHandlerRegistry registry) {
         Path uploadPath = Paths.get(uploadBaseDir).toAbsolutePath().normalize();
@@ -39,8 +42,13 @@ public class WebConfig implements WebMvcConfigurer {
 
     @Override
     public void addCorsMappings(CorsRegistry registry) {
+        String[] origins = java.util.Arrays.stream(allowedOrigins.split(","))
+                .map(String::trim)
+                .filter(s -> !s.isEmpty())
+                .toArray(String[]::new);
+
         registry.addMapping("/uploads/**")
-                .allowedOrigins("http://localhost:5173", "http://localhost:5174", "http://localhost:3000")
+                .allowedOriginPatterns(origins)
                 .allowedMethods("GET", "OPTIONS")
                 .maxAge(3600);
     }

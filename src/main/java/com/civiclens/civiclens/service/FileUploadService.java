@@ -1,5 +1,7 @@
 package com.civiclens.civiclens.service;
 
+import com.cloudinary.Cloudinary;
+import com.cloudinary.utils.ObjectUtils;
 import com.civiclens.civiclens.dto.FileUploadResponse;
 import com.civiclens.civiclens.exception.InvalidOperationException;
 import com.civiclens.civiclens.exception.UnauthorizedActionException;
@@ -21,6 +23,7 @@ import java.nio.file.StandardCopyOption;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
@@ -47,7 +50,20 @@ public class FileUploadService {
     @Value("${civiclens.upload.base-url:/uploads}")
     private String publicBaseUrl;
 
+    @Value("${civiclens.cloudinary.url:}")
+    private String cloudinaryUrl;
+
+    @Value("${civiclens.cloudinary.cloud-name:}")
+    private String cloudinaryCloudName;
+
+    @Value("${civiclens.cloudinary.api-key:}")
+    private String cloudinaryApiKey;
+
+    @Value("${civiclens.cloudinary.api-secret:}")
+    private String cloudinaryApiSecret;
+
     private Path rootStorageLocation;
+    private Cloudinary cloudinaryClient;
 
     @PostConstruct
     public void init() {
@@ -60,6 +76,23 @@ public class FileUploadService {
         } catch (IOException e) {
             log.error("Could not initialize media storage directories", e);
             throw new RuntimeException("Could not initialize media storage directories", e);
+        }
+
+        // Initialize Cloudinary if credentials are provided for persistent cloud storage
+        if (cloudinaryUrl != null && !cloudinaryUrl.isBlank()) {
+            this.cloudinaryClient = new Cloudinary(cloudinaryUrl.trim());
+            log.info("Cloudinary persistent media storage initialized via CLOUDINARY_URL");
+        } else if (cloudinaryCloudName != null && !cloudinaryCloudName.isBlank()
+                && cloudinaryApiKey != null && !cloudinaryApiKey.isBlank()
+                && cloudinaryApiSecret != null && !cloudinaryApiSecret.isBlank()) {
+            this.cloudinaryClient = new Cloudinary(ObjectUtils.asMap(
+                    "cloud_name", cloudinaryCloudName.trim(),
+                    "api_key", cloudinaryApiKey.trim(),
+                    "api_secret", cloudinaryApiSecret.trim()
+            ));
+            log.info("Cloudinary persistent media storage initialized for cloud: {}", cloudinaryCloudName);
+        } else {
+            log.info("Cloudinary credentials not provided. Using local disk storage in: {}", this.rootStorageLocation);
         }
     }
 
@@ -121,7 +154,27 @@ public class FileUploadService {
         String normalizedExt = "jpeg".equals(extension) ? "jpg" : extension;
         String uniqueFilename = UUID.randomUUID().toString() + "." + normalizedExt;
 
-        // 8. Resolve destination path and verify directory traversal
+        // 8. If Cloudinary is configured, upload to Cloudinary for permanent storage
+        if (this.cloudinaryClient != null) {
+            try {
+                @SuppressWarnings("unchecked")
+                Map<String, Object> uploadResult = this.cloudinaryClient.uploader().upload(
+                        file.getBytes(),
+                        ObjectUtils.asMap(
+                                "folder", "civiclens/" + targetFolder,
+                                "public_id", uniqueFilename.substring(0, uniqueFilename.lastIndexOf(".")),
+                                "resource_type", "image"
+                        )
+                );
+                String secureUrl = (String) uploadResult.get("secure_url");
+                log.info("User {} uploaded image to persistent Cloudinary storage: {}", currentUser.getEmail(), secureUrl);
+                return FileUploadResponse.success(secureUrl, uniqueFilename, file.getSize(), contentType);
+            } catch (IOException e) {
+                log.error("Cloudinary upload failed, falling back to local filesystem storage", e);
+            }
+        }
+
+        // 9. Resolve destination path and verify directory traversal
         Path folderPath = this.rootStorageLocation.resolve(targetFolder).normalize();
         Path destinationFile = folderPath.resolve(uniqueFilename).normalize();
 
@@ -129,7 +182,7 @@ public class FileUploadService {
             throw new InvalidOperationException("Path traversal attempt detected. Upload rejected.");
         }
 
-        // 9. Write to disk
+        // 10. Write to disk
         try (InputStream inputStream = file.getInputStream()) {
             Files.copy(inputStream, destinationFile, StandardCopyOption.REPLACE_EXISTING);
         } catch (IOException e) {
@@ -137,7 +190,7 @@ public class FileUploadService {
             throw new RuntimeException("Failed to store uploaded file on server", e);
         }
 
-        // 10. Construct accessible URL path
+        // 11. Construct accessible URL path
         String imageUrl = publicBaseUrl + "/" + targetFolder + "/" + uniqueFilename;
         log.info("User {} successfully uploaded image to {}", currentUser.getEmail(), imageUrl);
 
